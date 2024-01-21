@@ -2,11 +2,9 @@
 
 int main()
 {
-    sr_checkProjDir();
-
     vector<string> imgs = sr_findImgs();
-    int len = imgs.size();
-    for( int i=0 ; i<len ; i++ )
+    long len = imgs.size();
+    for( long i=0 ; i<len ; i++ )
     {
         sr_processFiles(imgs[i]);
     }
@@ -17,7 +15,7 @@ int main()
 
     if( answer=="y" || answer.size()==0 || answer=="Y" )
     {
-        for( int i=0 ; i<len ; i++ )
+        for( long i=0 ; i<len ; i++ )
         {
 //            raw2img(imgs[i]);
         }

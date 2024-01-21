@@ -3,6 +3,7 @@
 FILE *img_file = NULL;
 FILE *raw_file = NULL;
 char *f_buffer;
+long  curr_pos;
 
 void sr_processFiles(string base_name)
 {
@@ -20,7 +21,7 @@ void sr_processFiles(string base_name)
     }
 
     // scan 1
-    vector<int> positions = sr_findPositions();
+    vector<long> positions = sr_findPositions();
     // scan 2
     sr_replaceBytes(positions);
 
@@ -28,12 +29,12 @@ void sr_processFiles(string base_name)
     fclose(img_file);
 }
 
-void sr_replaceBytes(vector<int> positions)
+void sr_replaceBytes(vector<long> positions)
 {
     size_t read_size;
     fseek(img_file, 0, SEEK_SET);
     size_t total_read = 0;
-    int position_cntr = 0;
+    long position_cntr = 0;
     while( 1 )
     {
         size_t min_read = sr_getReadSize(positions, position_cntr,
@@ -44,7 +45,7 @@ void sr_replaceBytes(vector<int> positions)
         fwrite(f_buffer, read_size, 1, raw_file);
         if( min_read!=SR_BLOCK_SIZE )
         {
-            for( int i=0 ; i<SR_REPLACE_SIZE ; i++ )
+            for( long i=0 ; i<SR_REPLACE_SIZE ; i++ )
             {
                 fwrite("\0", 1, 1, raw_file);
             }
@@ -56,24 +57,7 @@ void sr_replaceBytes(vector<int> positions)
     free(f_buffer);
 }
 
-// check if .exe file is in debug or release directories, if yes
-// change directory to project directory
-void sr_checkProjDir()
-{
-    char buffer[MAX_PATH];
-    string exe_path = sr_getCurrentPath();
-    size_t delim_ind = exe_path.find_last_of("\\");
-    string exe_dir = exe_path.substr(delim_ind+1);
-    if( exe_dir=="debug" || exe_dir=="release" )
-    {
-        string proj_dir = exe_path.substr(0, delim_ind);
-        SetCurrentDirectoryA(proj_dir.c_str());
-        GetCurrentDirectoryA(MAX_PATH, buffer);
-        cout << "New current directory: " << buffer << endl;
-    }
-}
-
-// list imgs in proj dir except recovery.img
+// list all .img in current dir except recovery.img
 vector<string> sr_findImgs()
 {
     vector<string> ret;
@@ -121,14 +105,14 @@ void sr_raw2img(string base_name)
     rename(raw_path.c_str(), full_path.c_str());
 }
 
-vector<int> sr_findPositions()
+vector<long> sr_findPositions()
 {
-    int counter = 0;
-    vector<int> positions;
+    long counter = 0;
+    vector<long> positions;
     size_t read_size;
     f_buffer = (char *)malloc(SR_BLOCK_SIZE);
+    curr_pos = 0;
 
-    // SCAN 1
     while( 1 )
     {
         read_size = fread(f_buffer, 1, SR_BLOCK_SIZE, img_file);
@@ -136,8 +120,7 @@ vector<int> sr_findPositions()
         cout << ">> " << counter << " " << read_size << endl;
 
         /// FIXME: based on seek it should change
-        sr_findBlockPos(&block, &positions,
-                        counter*SR_BLOCK_SIZE);
+        sr_findBlockPos(&block, &positions);
         if( read_size<SR_BLOCK_SIZE )
         {
             break;
@@ -145,19 +128,20 @@ vector<int> sr_findPositions()
 
         // to prevent segmentation of pattern
         counter++;
-        fseek(img_file, counter*SR_BLOCK_SIZE-SR_BUFFER_MARGIN,
-              SEEK_SET);
+        curr_pos = counter*SR_BLOCK_SIZE-SR_BUFFER_MARGIN;
+        fseek(img_file, curr_pos, SEEK_SET);
     }
     return positions;
 }
 
-int sr_getReadSize(vector<int> addresses, size_t nth, int curr_addr)
+long sr_getReadSize(vector<long> addresses, size_t nth,
+                    long curr_addr)
 {
     if( nth<0 || nth>=addresses.size() )
     {
         return SR_BLOCK_SIZE;
     }
-    int rs = addresses[nth]; //read size
+    long rs = addresses[nth]; //read size
     if( rs>=curr_addr+SR_BLOCK_SIZE )
     {
         return SR_BLOCK_SIZE;
@@ -169,10 +153,9 @@ int sr_getReadSize(vector<int> addresses, size_t nth, int curr_addr)
     return rs;
 }
 
-void sr_findBlockPos(string *block, vector<int> *positions,
-                     int file_offset)
+void sr_findBlockPos(string *block, vector<long> *positions)
 {
-    int start_pos = 0;
+    long start_pos = 0;
     string pattern = "SignerVer02";
 
     while( 1 )
@@ -181,14 +164,15 @@ void sr_findBlockPos(string *block, vector<int> *positions,
         if( index!=string::npos )
         { // found
             start_pos = index;
+            index += curr_pos;
 
-            // only add index if it doesn't exist already
-            vector<int>::iterator it;
+            // only add index if it doesn't already exist
+            vector<long>::iterator it;
             it = find(positions->begin(), positions->end(),
-                      file_offset + index);
+                      index);
             if( it==positions->end() )
             { // new found pattern in file
-                positions->push_back(file_offset + index);
+                positions->push_back(index);
             }
         }
         else

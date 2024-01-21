@@ -21,13 +21,12 @@ using namespace std;
 
 string sr_getCurrentPath();
 vector<string> sr_findImgs();
-vector<int>    sr_findPositions();
-int  sr_getReadSize(vector<int> addresses, size_t nth, int curr_addr);
+vector<long>   sr_findPositions();
+long  sr_getReadSize(vector<long> addresses, size_t nth, long curr_addr);
 void sr_processFiles(string base_name);
 void sr_checkProjDir();
-void sr_replaceBytes(vector<int> positions);
+void sr_replaceBytes(vector<long> positions);
 void sr_raw2img(string base_name);
-void sr_findBlockPos(string *block, vector<int> *positions,
-                     int file_offset);
+void sr_findBlockPos(string *block, vector<long> *positions);
 
 #endif // SR_BACKEND_H
