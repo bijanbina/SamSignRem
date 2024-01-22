@@ -17,7 +17,7 @@ int main()
     {
         for( long i=0 ; i<len ; i++ )
         {
-//            raw2img(imgs[i]);
+            sr_raw2img(imgs[i]);
         }
     }
 

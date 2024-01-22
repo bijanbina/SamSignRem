@@ -20,8 +20,11 @@ void sr_processFiles(string base_name)
         return;
     }
 
+    cout << "Processing " << base_name << endl;
+
     // scan 1
     vector<long> positions = sr_findPositions();
+
     // scan 2
     sr_replaceBytes(positions);
 
@@ -31,26 +34,31 @@ void sr_processFiles(string base_name)
 
 void sr_replaceBytes(vector<long> positions)
 {
-    size_t read_size;
     fseek(img_file, 0, SEEK_SET);
-    size_t total_read = 0;
-    long position_cntr = 0;
+    curr_pos = 0;
+    int pos_len = positions.size();
+    for( int i=0 ; i<pos_len ; i++ )
+    {
+        sr_rwUntilPosition(positions[i]);
+        sr_printAscii(positions[i]);
+        sr_printHex(positions[i]);
+
+        for( long j=0 ; j<SR_REPLACE_SIZE ; j++ )
+        {
+            fwrite("\0", 1, 1, raw_file);
+        }
+        curr_pos += SR_REPLACE_SIZE;
+        fseek(img_file, curr_pos, SEEK_SET);
+    }
+
     while( 1 )
     {
-        size_t min_read = sr_getReadSize(positions, position_cntr,
-                                      total_read);
-        total_read += min_read;
-
-        read_size = fread(f_buffer, 1, min_read, img_file);
+        int read_size = fread(f_buffer, 1, SR_BLOCK_SIZE, img_file);
         fwrite(f_buffer, read_size, 1, raw_file);
-        if( min_read!=SR_BLOCK_SIZE )
+
+        if( read_size<SR_BLOCK_SIZE )
         {
-            for( long i=0 ; i<SR_REPLACE_SIZE ; i++ )
-            {
-                fwrite("\0", 1, 1, raw_file);
-            }
-            fseek(img_file, total_read + SR_REPLACE_SIZE, SEEK_SET);
-            position_cntr++;
+            break;
         }
     }
 
@@ -117,7 +125,6 @@ vector<long> sr_findPositions()
     {
         read_size = fread(f_buffer, 1, SR_BLOCK_SIZE, img_file);
         string block(f_buffer, read_size);
-        cout << ">> " << counter << " " << read_size << endl;
 
         /// FIXME: based on seek it should change
         sr_findBlockPos(&block, &positions);
@@ -134,25 +141,6 @@ vector<long> sr_findPositions()
     return positions;
 }
 
-long sr_getReadSize(vector<long> addresses, size_t nth,
-                    long curr_addr)
-{
-    if( nth<0 || nth>=addresses.size() )
-    {
-        return SR_BLOCK_SIZE;
-    }
-    long rs = addresses[nth]; //read size
-    if( rs>=curr_addr+SR_BLOCK_SIZE )
-    {
-        return SR_BLOCK_SIZE;
-    }
-    while( rs>=SR_BLOCK_SIZE )
-    {
-        rs -= SR_BLOCK_SIZE;
-    }
-    return rs;
-}
-
 void sr_findBlockPos(string *block, vector<long> *positions)
 {
     long start_pos = 0;
@@ -163,7 +151,7 @@ void sr_findBlockPos(string *block, vector<long> *positions)
         size_t index = block->find(pattern, start_pos);
         if( index!=string::npos )
         { // found
-            start_pos = index;
+            start_pos = index + 1;
             index += curr_pos;
 
             // only add index if it doesn't already exist
@@ -179,5 +167,63 @@ void sr_findBlockPos(string *block, vector<long> *positions)
         {
             break;
         }
+    }
+}
+
+void sr_printAscii(long position)
+{
+    char buffer[46];
+    long cur_pos = ftell(img_file);
+    fseek(img_file, position, SEEK_SET);
+    int read_size = fread(buffer, 1, SR_REPLACE_SIZE, img_file);
+
+    cout << "Str: ";
+    for( int i=0 ; i<read_size ; i++ )
+    {
+        if( buffer[i]>31 && buffer[i]<127 )
+        {
+            printf("%c", buffer[i]);
+        }
+        else
+        {
+            printf(".");
+        }
+    }
+    cout << endl;
+
+    fseek(img_file, cur_pos, SEEK_SET);
+}
+
+void sr_printHex(long position)
+{
+    char buffer[46];
+    long cur_pos = ftell(img_file);
+    fseek(img_file, position, SEEK_SET);
+    int read_size = fread(buffer, 1, SR_REPLACE_SIZE, img_file);
+
+    cout << "Hex: ";
+    for( int i=0 ; i<read_size ; i++ )
+    {
+        printf("0x%x ", buffer[i]);
+    }
+    cout << endl;
+
+    fseek(img_file, cur_pos, SEEK_SET);
+}
+
+// read from file and write to the output till the input position
+void sr_rwUntilPosition(long position)
+{
+    while( curr_pos<position )
+    {
+        int read_size = SR_BLOCK_SIZE;
+        if( curr_pos+SR_BLOCK_SIZE>position )
+        {
+            read_size = position - curr_pos;
+        }
+
+        fread(f_buffer, 1, read_size, img_file);
+        fwrite(f_buffer, read_size, 1, raw_file);
+        curr_pos += read_size;
     }
 }
