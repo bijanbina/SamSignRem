@@ -4,66 +4,7 @@ FILE *img_file = NULL;
 FILE *raw_file = NULL;
 char *f_buffer;
 long  curr_pos;
-
-void sr_processFiles(string base_name)
-{
-    string raw_name = base_name;
-    raw_name.replace(base_name.size()-4, 4, ".raw");
-    string full_path = sr_getCurrentPath() + "\\" + base_name;
-    string raw_path = sr_getCurrentPath() + "\\" + raw_name;
-    img_file = fopen(full_path.c_str(), "rb");
-    raw_file = fopen(raw_path.c_str(), "wb");
-    if( img_file==NULL )
-    {
-        cout << "Error: cannot open file: " << full_path << endl;
-        fclose(raw_file);
-        return;
-    }
-
-    cout << "Processing " << base_name << endl;
-
-    // scan 1
-    vector<long> positions = sr_findPositions();
-
-    // scan 2
-    sr_replaceBytes(positions);
-
-    fclose(raw_file);
-    fclose(img_file);
-}
-
-void sr_replaceBytes(vector<long> positions)
-{
-    fseek(img_file, 0, SEEK_SET);
-    curr_pos = 0;
-    int pos_len = positions.size();
-    for( int i=0 ; i<pos_len ; i++ )
-    {
-        sr_rwUntilPosition(positions[i]);
-        sr_printAscii(positions[i]);
-        sr_printHex(positions[i]);
-
-        for( long j=0 ; j<SR_REPLACE_SIZE ; j++ )
-        {
-            fwrite("\0", 1, 1, raw_file);
-        }
-        curr_pos += SR_REPLACE_SIZE;
-        fseek(img_file, curr_pos, SEEK_SET);
-    }
-
-    while( 1 )
-    {
-        int read_size = fread(f_buffer, 1, SR_BLOCK_SIZE, img_file);
-        fwrite(f_buffer, read_size, 1, raw_file);
-
-        if( read_size<SR_BLOCK_SIZE )
-        {
-            break;
-        }
-    }
-
-    free(f_buffer);
-}
+vector<long> positions;
 
 // list all .img in current dir except recovery.img
 vector<string> sr_findImgs()
@@ -102,21 +43,67 @@ string sr_getCurrentPath()
     return path;
 }
 
-void sr_raw2img(string base_name)
+void sr_processFiles(string base_name)
 {
     string raw_name = base_name;
     raw_name.replace(base_name.size()-4, 4, ".raw");
     string full_path = sr_getCurrentPath() + "\\" + base_name;
     string raw_path = sr_getCurrentPath() + "\\" + raw_name;
+    img_file = fopen(full_path.c_str(), "rb");
+    raw_file = fopen(raw_path.c_str(), "wb");
+    if( img_file==NULL )
+    {
+        cout << "Error: cannot open file: " << full_path << endl;
+        fclose(raw_file);
+        return;
+    }
 
-    remove(full_path.c_str());
-    rename(raw_path.c_str(), full_path.c_str());
+    cout << "Processing " << base_name << endl;
+
+    sr_fillPositions();
+    sr_replaceBytes();
+
+    fclose(raw_file);
+    fclose(img_file);
 }
 
-vector<long> sr_findPositions()
+void sr_replaceBytes()
 {
+    fseek(img_file, 0, SEEK_SET);
+    curr_pos = 0;
+    int pos_len = positions.size();
+    for( int i=0 ; i<pos_len ; i++ )
+    {
+        sr_rwUntilPosition(positions[i]);
+        sr_printAscii(i);
+        sr_printHex(i);
+
+        for( long j=0 ; j<SR_REPLACE_SIZE ; j++ )
+        {
+            fwrite("\0", 1, 1, raw_file);
+        }
+        curr_pos += SR_REPLACE_SIZE;
+        fseek(img_file, curr_pos, SEEK_SET);
+    }
+
+    while( 1 )
+    {
+        int read_size = fread(f_buffer, 1, SR_BLOCK_SIZE, img_file);
+        fwrite(f_buffer, read_size, 1, raw_file);
+
+        if( read_size<SR_BLOCK_SIZE )
+        {
+            break;
+        }
+    }
+
+    free(f_buffer);
+}
+
+void sr_fillPositions()
+{
+    positions.clear();
     long counter = 0;
-    vector<long> positions;
     size_t read_size;
     f_buffer = (char *)malloc(SR_BLOCK_SIZE);
     curr_pos = 0;
@@ -127,7 +114,7 @@ vector<long> sr_findPositions()
         string block(f_buffer, read_size);
 
         /// FIXME: based on seek it should change
-        sr_findBlockPos(&block, &positions);
+        sr_findBlockPos(&block);
         if( read_size<SR_BLOCK_SIZE )
         {
             break;
@@ -138,10 +125,9 @@ vector<long> sr_findPositions()
         curr_pos = counter*SR_BLOCK_SIZE-SR_BUFFER_MARGIN;
         fseek(img_file, curr_pos, SEEK_SET);
     }
-    return positions;
 }
 
-void sr_findBlockPos(string *block, vector<long> *positions)
+void sr_findBlockPos(string *block)
 {
     long start_pos = 0;
     string pattern = "SignerVer02";
@@ -156,11 +142,11 @@ void sr_findBlockPos(string *block, vector<long> *positions)
 
             // only add index if it doesn't already exist
             vector<long>::iterator it;
-            it = find(positions->begin(), positions->end(),
+            it = find(positions.begin(), positions.end(),
                       index);
-            if( it==positions->end() )
+            if( it==positions.end() )
             { // new found pattern in file
-                positions->push_back(index);
+                positions.push_back(index);
             }
         }
         else
@@ -170,14 +156,14 @@ void sr_findBlockPos(string *block, vector<long> *positions)
     }
 }
 
-void sr_printAscii(long position)
+void sr_printAscii(int index)
 {
     char buffer[46];
     long cur_pos = ftell(img_file);
-    fseek(img_file, position, SEEK_SET);
+    fseek(img_file, positions[index], SEEK_SET);
     int read_size = fread(buffer, 1, SR_REPLACE_SIZE, img_file);
 
-    cout << "Str: ";
+    cout << "[" << index << "] Str: ";
     for( int i=0 ; i<read_size ; i++ )
     {
         if( buffer[i]>31 && buffer[i]<127 )
@@ -194,14 +180,18 @@ void sr_printAscii(long position)
     fseek(img_file, cur_pos, SEEK_SET);
 }
 
-void sr_printHex(long position)
+void sr_printHex(int index)
 {
     char buffer[46];
     long cur_pos = ftell(img_file);
-    fseek(img_file, position, SEEK_SET);
+    fseek(img_file, positions[index], SEEK_SET);
     int read_size = fread(buffer, 1, SR_REPLACE_SIZE, img_file);
 
-    cout << "Hex: ";
+    cout << "[" << index << "] Hex: ";
+    if( read_size>20 )
+    {
+        read_size = 20;
+    }
     for( int i=0 ; i<read_size ; i++ )
     {
         printf("0x%x ", buffer[i]);
@@ -226,4 +216,15 @@ void sr_rwUntilPosition(long position)
         fwrite(f_buffer, read_size, 1, raw_file);
         curr_pos += read_size;
     }
+}
+
+void sr_raw2img(string base_name)
+{
+    string raw_name = base_name;
+    raw_name.replace(base_name.size()-4, 4, ".raw");
+    string full_path = sr_getCurrentPath() + "\\" + base_name;
+    string raw_path = sr_getCurrentPath() + "\\" + raw_name;
+
+    remove(full_path.c_str());
+    rename(raw_path.c_str(), full_path.c_str());
 }

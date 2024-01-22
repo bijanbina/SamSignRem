@@ -11,7 +11,7 @@ int main()
 
     string answer;
     cout << "Replace .img files? [Y|n]: ";
-    cin >> answer;
+    std::getline(std::cin, answer);
 
     if( answer=="y" || answer.size()==0 || answer=="Y" )
     {
