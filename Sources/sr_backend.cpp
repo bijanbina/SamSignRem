@@ -11,23 +11,17 @@ vector<string> sr_findImgs()
 {
     vector<string> ret;
     string path = sr_getCurrentPath();
+    DIR    *dir = opendir(path.c_str());
 
-    DIR *dir = opendir(path.c_str());
-    struct dirent *entry;
-
-    while( 1 )
+    dirent *file = readdir(dir);
+    while( file )
     {
-        entry = readdir(dir);
-        if( entry==NULL )
+        string filename = file->d_name;
+        if( isValidImage(filename) )
         {
-            break;
+            ret.push_back(filename);
         }
-        string name = entry->d_name;
-        if( name.find(".img")!=string::npos &&
-            name!="recovery.img" )
-        {
-            ret.push_back(name);
-        }
+        file = readdir(dir);
     }
     closedir(dir);
 
@@ -60,14 +54,21 @@ void sr_processFiles(string base_name)
 
     cout << "Processing " << base_name << endl;
 
-    sr_fillPositions();
-    sr_replaceBytes();
+    string pattern = "SignerVer02";
+    // add null bytes
+    pattern.resize(pattern.length()+3, '\0');
+
+    string rep;
+    rep.resize(SR_REPLACE_SIZE, '\0');
+
+    sr_fillPositions(pattern);
+    sr_replaceBytes(rep);
 
     fclose(raw_file);
     fclose(img_file);
 }
 
-void sr_replaceBytes()
+void sr_replaceBytes(string replacement)
 {
     fseek(img_file, 0, SEEK_SET);
     curr_pos = 0;
@@ -78,10 +79,8 @@ void sr_replaceBytes()
         sr_printAscii(i);
         sr_printHex(i);
 
-        for( long j=0 ; j<SR_REPLACE_SIZE ; j++ )
-        {
-            fwrite("\0", 1, 1, raw_file);
-        }
+        fwrite(replacement.c_str(), 1,
+               replacement.length(), raw_file);
         curr_pos += SR_REPLACE_SIZE;
         fseek(img_file, curr_pos, SEEK_SET);
     }
@@ -89,7 +88,7 @@ void sr_replaceBytes()
     while( 1 )
     {
         int read_size = fread(f_buffer, 1, SR_BLOCK_SIZE, img_file);
-        fwrite(f_buffer, read_size, 1, raw_file);
+        fwrite(f_buffer, 1, read_size, raw_file);
 
         if( read_size<SR_BLOCK_SIZE )
         {
@@ -100,7 +99,7 @@ void sr_replaceBytes()
     free(f_buffer);
 }
 
-void sr_fillPositions()
+void sr_fillPositions(string pattern)
 {
     positions.clear();
     long counter = 0;
@@ -112,46 +111,40 @@ void sr_fillPositions()
     {
         read_size = fread(f_buffer, 1, SR_BLOCK_SIZE, img_file);
         string block(f_buffer, read_size);
-
         /// FIXME: based on seek it should change
-        sr_findBlockPos(&block);
+        sr_findPattInBlock(&block, pattern);
         if( read_size<SR_BLOCK_SIZE )
         {
             break;
         }
 
-        // to prevent segmentation of pattern
         counter++;
         curr_pos = counter*SR_BLOCK_SIZE-SR_BUFFER_MARGIN;
         fseek(img_file, curr_pos, SEEK_SET);
     }
 }
 
-void sr_findBlockPos(string *block)
+void sr_findPattInBlock(string *block, string pattern)
 {
     long start_pos = 0;
-    string pattern = "SignerVer02";
-
     while( 1 )
     {
-        size_t index = block->find(pattern, start_pos);
-        if( index!=string::npos )
-        { // found
-            start_pos = index + 1;
-            index += curr_pos;
-
-            // only add index if it doesn't already exist
-            vector<long>::iterator it;
-            it = find(positions.begin(), positions.end(),
-                      index);
-            if( it==positions.end() )
-            { // new found pattern in file
-                positions.push_back(index);
-            }
-        }
-        else
+        int index = block->find(pattern, start_pos);
+        if( index==-1 ) // not found
         {
             break;
+        }
+
+        start_pos = index + 1;
+        index += curr_pos;
+
+        // only add index if it doesn't already exist
+        vector<long>::iterator it;
+        it = find(positions.begin(), positions.end(),
+                  index);
+        if( it==positions.end() )
+        { // new found pattern in file
+            positions.push_back(index);
         }
     }
 }
@@ -213,7 +206,7 @@ void sr_rwUntilPosition(long position)
         }
 
         fread(f_buffer, 1, read_size, img_file);
-        fwrite(f_buffer, read_size, 1, raw_file);
+        fwrite(f_buffer, 1, read_size, raw_file);
         curr_pos += read_size;
     }
 }
@@ -227,4 +220,31 @@ void sr_raw2img(string base_name)
 
     remove(full_path.c_str());
     rename(raw_path.c_str(), full_path.c_str());
+}
+
+void sr_rmRaw(string base_name)
+{
+    string raw_name = base_name;
+    raw_name.replace(base_name.size()-4, 4, ".raw");
+    string raw_path = sr_getCurrentPath() + "\\" + raw_name;
+    remove(raw_path.c_str());
+}
+
+// return true if its a valid image format
+int isValidImage(string name)
+{
+    if( name=="recovery.img" ||
+        name=="recovery.bin" )
+    {
+        return 0;
+    }
+
+    int have_img = name.find(".img");
+    int have_bin = name.find(".bin");
+    if( have_img==-1 && have_bin==-1 )
+    {
+        return 0;
+    }
+
+    return 1;
 }

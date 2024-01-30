@@ -10,7 +10,8 @@ int main()
     }
 
     string answer;
-    cout << "Replace .img files? [Y|n]: ";
+    cout << "Samsung Sign Remover V0.3\n";
+    cout << "Confirm Replacing? [Y|n]: ";
     std::getline(std::cin, answer);
 
     if( answer=="y" || answer.size()==0 || answer=="Y" )
@@ -20,7 +21,13 @@ int main()
             sr_raw2img(imgs[i]);
         }
     }
+    else
+    {
+        for( long i=0 ; i<len ; i++ )
+        {
+            sr_rmRaw(imgs[i]);
+        }
+    }
 
     return 0;
 }
-

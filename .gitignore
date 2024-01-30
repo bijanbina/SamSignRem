@@ -75,3 +75,5 @@ Thumbs.db
 *.img
 
 *.raw
+
+*.bin
