@@ -10,7 +10,7 @@ int main()
     }
 
     string answer;
-    cout << "Samsung Sign Remover V0.3\n";
+    cout << "Samsung Sign Remover V0.4\n";
     cout << "Confirm Replacing? [Y|n]: ";
     std::getline(std::cin, answer);
 
