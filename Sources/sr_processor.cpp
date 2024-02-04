@@ -1,48 +1,15 @@
-#include "sr_backend.h"
+#include "sr_processor.h"
 
-FILE *img_file = NULL;
-FILE *raw_file = NULL;
-char *f_buffer;
-int64_t  curr_pos;
-vector<int64_t> positions;
-
-// list all .img in current dir except recovery.img
-vector<string> sr_findImgs()
+SrProcessor::SrProcessor()
 {
-    vector<string> ret;
-    string path = sr_getCurrentPath();
-    DIR    *dir = opendir(path.c_str());
 
-    dirent *file = readdir(dir);
-    while( file )
-    {
-        string filename = file->d_name;
-        if( isValidImage(filename) )
-        {
-            ret.push_back(filename);
-        }
-        file = readdir(dir);
-    }
-    closedir(dir);
-
-    return ret;
 }
 
-string sr_getCurrentPath()
+void SrProcessor::processFile(string base_name)
 {
-    char buffer[MAX_PATH];
-    GetCurrentDirectoryA(MAX_PATH, buffer);
-
-    string path(buffer);
-    return path;
-}
-
-void sr_processFiles(string base_name)
-{
-    string raw_name = base_name;
-    raw_name.replace(base_name.size()-4, 4, ".raw");
-    string full_path = sr_getCurrentPath() + "\\" + base_name;
-    string raw_path = sr_getCurrentPath() + "\\" + raw_name;
+    sr_mkdir("patched");
+    string full_path = sr_getCurrentPath() + "\\lz4\\" + base_name;
+    string raw_path = sr_getCurrentPath() + "\\patched\\" + base_name;
     img_file = fopen(full_path.c_str(), "rb");
     raw_file = fopen(raw_path.c_str(), "wb");
     if( img_file==NULL )
@@ -77,23 +44,23 @@ void sr_processFiles(string base_name)
            0x00, 0x00, 0x53, 0x52, 0x50, 0x56, 0x4C, 0x30, 0x32,
            0x41, 0x30, 0x30, 0x34, 0x00, 0x00, 0x00, 0x00, 0x00};
 
-    sr_fillPositions(pattern);
-    sr_replaceBytes(rep);
+    fillPositions(pattern);
+    replaceBytes(rep);
 
     fclose(raw_file);
     fclose(img_file);
 }
 
-void sr_replaceBytes(string replacement)
+void SrProcessor::replaceBytes(string replacement)
 {
     fseek(img_file, 0, SEEK_SET);
     curr_pos = 0;
     int pos_len = positions.size();
     for( int i=0 ; i<pos_len ; i++ )
     {
-        sr_rwUntilPosition(positions[i]);
-        sr_printAscii(i, replacement.length());
-        sr_printHex(i, replacement.length());
+        rwUntilPosition(positions[i]);
+        printAscii(i, replacement.length());
+        printHex(i, replacement.length());
 
         fwrite(replacement.c_str(), 1,
                replacement.length(), raw_file);
@@ -116,7 +83,7 @@ void sr_replaceBytes(string replacement)
     free(f_buffer);
 }
 
-void sr_fillPositions(string pattern)
+void SrProcessor::fillPositions(string pattern)
 {
     positions.clear();
     int counter = 0;
@@ -130,7 +97,7 @@ void sr_fillPositions(string pattern)
                           SR_BLOCK_SIZE+SR_BUFFER_MARGIN, img_file);
         string block(f_buffer, read_size);
         /// FIXME: based on seek it should change
-        sr_findPattInBlock(&block, pattern);
+        findPattInBlock(&block, pattern);
         if( read_size<SR_BLOCK_SIZE )
         {
             break;
@@ -144,7 +111,7 @@ void sr_fillPositions(string pattern)
     }
 }
 
-void sr_findPattInBlock(string *block, string pattern)
+void SrProcessor::findPattInBlock(string *block, string pattern)
 {
     int start_pos = 0;
     while( 1 )
@@ -171,7 +138,7 @@ void sr_findPattInBlock(string *block, string pattern)
     }
 }
 
-void sr_printAscii(int index, int len)
+void SrProcessor::printAscii(int index, int len)
 {
     char buffer[200];
     int64_t cur_pos = ftell(img_file);
@@ -196,7 +163,7 @@ void sr_printAscii(int index, int len)
     _fseeki64(img_file, cur_pos, SEEK_SET);
 }
 
-void sr_printHex(int index, int len)
+void SrProcessor::printHex(int index, int len)
 {
     char buffer[200];
     int64_t cur_pos = ftell(img_file);
@@ -218,7 +185,7 @@ void sr_printHex(int index, int len)
 }
 
 // read from file and write to the output till the input position
-void sr_rwUntilPosition(int64_t position)
+void SrProcessor::rwUntilPosition(int64_t position)
 {
     while( curr_pos<position )
     {
@@ -232,42 +199,4 @@ void sr_rwUntilPosition(int64_t position)
         fwrite(f_buffer, 1, read_size, raw_file);
         curr_pos += read_size;
     }
-}
-
-void sr_raw2img(string base_name)
-{
-    string raw_name = base_name;
-    raw_name.replace(base_name.size()-4, 4, ".raw");
-    string full_path = sr_getCurrentPath() + "\\" + base_name;
-    string raw_path = sr_getCurrentPath() + "\\" + raw_name;
-
-    remove(full_path.c_str());
-    rename(raw_path.c_str(), full_path.c_str());
-}
-
-void sr_rmRaw(string base_name)
-{
-    string raw_name = base_name;
-    raw_name.replace(base_name.size()-4, 4, ".raw");
-    string raw_path = sr_getCurrentPath() + "\\" + raw_name;
-    remove(raw_path.c_str());
-}
-
-// return true if its a valid image format
-int isValidImage(string name)
-{
-    if( name=="recovery.img" ||
-        name=="recovery.bin" )
-    {
-        return 0;
-    }
-
-    int have_img = name.find(".img");
-    int have_bin = name.find(".bin");
-    if( have_img==-1 && have_bin==-1 )
-    {
-        return 0;
-    }
-
-    return 1;
 }
