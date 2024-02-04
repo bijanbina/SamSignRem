@@ -26,7 +26,7 @@ void sr_processFiles(string base_name);
 void sr_checkProjDir();
 void sr_printAscii(int index, int len);
 void sr_printHex(int index, int len);
-void sr_rwUntilPosition(long position);
+void sr_rwUntilPosition(int64_t position);
 void sr_replaceBytes(string replacement);
 void sr_raw2img(string base_name);
 void sr_rmRaw(string base_name);

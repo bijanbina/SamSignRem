@@ -3,8 +3,8 @@
 int main()
 {
     vector<string> imgs = sr_findImgs();
-    long len = imgs.size();
-    for( long i=0 ; i<len ; i++ )
+    int len = imgs.size();
+    for( int i=0 ; i<len ; i++ )
     {
         sr_processFiles(imgs[i]);
     }
@@ -16,14 +16,14 @@ int main()
 
     if( answer=="y" || answer.size()==0 || answer=="Y" )
     {
-        for( long i=0 ; i<len ; i++ )
+        for( int i=0 ; i<len ; i++ )
         {
             sr_raw2img(imgs[i]);
         }
     }
     else
     {
-        for( long i=0 ; i<len ; i++ )
+        for( int i=0 ; i<len ; i++ )
         {
             sr_rmRaw(imgs[i]);
         }

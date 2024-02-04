@@ -3,8 +3,8 @@
 FILE *img_file = NULL;
 FILE *raw_file = NULL;
 char *f_buffer;
-long  curr_pos;
-vector<long> positions;
+int64_t  curr_pos;
+vector<int64_t> positions;
 
 // list all .img in current dir except recovery.img
 vector<string> sr_findImgs()
@@ -98,12 +98,13 @@ void sr_replaceBytes(string replacement)
         fwrite(replacement.c_str(), 1,
                replacement.length(), raw_file);
         curr_pos += replacement.length();
-        fseek(img_file, curr_pos, SEEK_SET);
+        _fseeki64(img_file, curr_pos, SEEK_SET);
     }
 
     while( 1 )
     {
-        int read_size = fread(f_buffer, 1, SR_BLOCK_SIZE, img_file);
+        int read_size = fread(f_buffer, 1,
+                              SR_BLOCK_SIZE, img_file);
         fwrite(f_buffer, 1, read_size, raw_file);
 
         if( read_size<SR_BLOCK_SIZE )
@@ -118,14 +119,15 @@ void sr_replaceBytes(string replacement)
 void sr_fillPositions(string pattern)
 {
     positions.clear();
-    long counter = 0;
+    int counter = 0;
     size_t read_size;
-    f_buffer = (char *)malloc(SR_BLOCK_SIZE);
+    f_buffer = (char *)malloc(SR_BLOCK_SIZE+SR_BUFFER_MARGIN);
     curr_pos = 0;
 
     while( 1 )
     {
-        read_size = fread(f_buffer, 1, SR_BLOCK_SIZE, img_file);
+        read_size = fread(f_buffer, 1,
+                          SR_BLOCK_SIZE+SR_BUFFER_MARGIN, img_file);
         string block(f_buffer, read_size);
         /// FIXME: based on seek it should change
         sr_findPattInBlock(&block, pattern);
@@ -135,17 +137,19 @@ void sr_fillPositions(string pattern)
         }
 
         counter++;
+//        cout << "count " << counter << " "
+//             << curr_pos << "\n";
         curr_pos = counter*SR_BLOCK_SIZE-SR_BUFFER_MARGIN;
-        fseek(img_file, curr_pos, SEEK_SET);
+        _fseeki64(img_file, curr_pos, SEEK_SET);
     }
 }
 
 void sr_findPattInBlock(string *block, string pattern)
 {
-    long start_pos = 0;
+    int start_pos = 0;
     while( 1 )
     {
-        int index = block->find(pattern, start_pos);
+        int64_t index = block->find(pattern, start_pos);
         if( index==-1 ) // not found
         {
             break;
@@ -155,11 +159,13 @@ void sr_findPattInBlock(string *block, string pattern)
         index += curr_pos;
 
         // only add index if it doesn't already exist
-        vector<long>::iterator it;
+        vector<int64_t>::iterator it;
         it = find(positions.begin(), positions.end(),
                   index);
         if( it==positions.end() )
         { // new found pattern in file
+            cout << "found " << index << " "
+                 << curr_pos << "\n";
             positions.push_back(index);
         }
     }
@@ -168,11 +174,12 @@ void sr_findPattInBlock(string *block, string pattern)
 void sr_printAscii(int index, int len)
 {
     char buffer[200];
-    long cur_pos = ftell(img_file);
-    fseek(img_file, positions[index], SEEK_SET);
+    int64_t cur_pos = ftell(img_file);
+    _fseeki64(img_file, positions[index], SEEK_SET);
     int read_size = fread(buffer, 1, len, img_file);
 
-    cout << "[" << index << "] Str: ";
+    cout << "[" << index << "/" <<  positions[index]
+         << "] Str: ";
     for( int i=0 ; i<read_size ; i++ )
     {
         if( buffer[i]>31 && buffer[i]<127 )
@@ -186,14 +193,14 @@ void sr_printAscii(int index, int len)
     }
     cout << endl;
 
-    fseek(img_file, cur_pos, SEEK_SET);
+    _fseeki64(img_file, cur_pos, SEEK_SET);
 }
 
 void sr_printHex(int index, int len)
 {
     char buffer[200];
-    long cur_pos = ftell(img_file);
-    fseek(img_file, positions[index], SEEK_SET);
+    int64_t cur_pos = ftell(img_file);
+    _fseeki64(img_file, positions[index], SEEK_SET);
     int read_size = fread(buffer, 1, len, img_file);
 
     cout << "[" << index << "] Hex: ";
@@ -207,11 +214,11 @@ void sr_printHex(int index, int len)
     }
     cout << endl;
 
-    fseek(img_file, cur_pos, SEEK_SET);
+    _fseeki64(img_file, cur_pos, SEEK_SET);
 }
 
 // read from file and write to the output till the input position
-void sr_rwUntilPosition(long position)
+void sr_rwUntilPosition(int64_t position)
 {
     while( curr_pos<position )
     {
