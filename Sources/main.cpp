@@ -1,33 +1,25 @@
-#include "sr_backend.h"
+#include "sr_processor.h"
+#include "sr_lz4.h"
+#include "sr_tar.h"
 
 int main()
 {
-    vector<string> imgs = sr_findImgs();
+    cout << "Samsung Sign Remover V0.4\n";
+
+    sr_lz4Decode();
+
+    vector<string> imgs = sr_findImgs("lz4");
     int len = imgs.size();
+
+    SrProcessor processor;
     for( int i=0 ; i<len ; i++ )
     {
-        sr_processFiles(imgs[i]);
+        processor.processFile(imgs[i]);
     }
 
-    string answer;
-    cout << "Samsung Sign Remover V0.4\n";
-    cout << "Confirm Replacing? [Y|n]: ";
-    std::getline(std::cin, answer);
+    sr_lz4Code();
 
-    if( answer=="y" || answer.size()==0 || answer=="Y" )
-    {
-        for( int i=0 ; i<len ; i++ )
-        {
-            sr_raw2img(imgs[i]);
-        }
-    }
-    else
-    {
-        for( int i=0 ; i<len ; i++ )
-        {
-            sr_rmRaw(imgs[i]);
-        }
-    }
+    sr_tar();
 
     return 0;
 }
