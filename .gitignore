@@ -69,11 +69,15 @@ Thumbs.db
 # Binaries
 # --------
 *.dll
-*.exe
-
 
 *.img
 
 *.raw
 
 *.bin
+
+sag/
+
+debug/
+
+release/
